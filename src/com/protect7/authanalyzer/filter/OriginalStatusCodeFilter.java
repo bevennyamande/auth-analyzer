@@ -23,7 +23,7 @@ public class OriginalStatusCodeFilter extends RequestFilter {
 
 	public OriginalStatusCodeFilter(int filterIndex, String description) {
 		super(filterIndex, description);
-		setFilterStringLiterals(new String[]{"200,201,202,203,204,205,206,300,301,302,303,304,305,307,308"});
+		setFilterStringLiterals("200,201,202,203,204,205,206,300,301,302,303,304,305,307,308".split(","));
 	}
 
 	@Override
