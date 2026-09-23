@@ -11,7 +11,7 @@ public class OnlyProxyFilter extends RequestFilter {
 	}
 
 	@Override
-	public boolean filterRequest(IBurpExtenderCallbacks callbacks, int toolFlag, IRequestInfo requestInfo, IResponseInfo responseInfo) {
+	public boolean filterRequest(IBurpExtenderCallbacks callbacks, int toolFlag, IRequestInfo requestInfo, IResponseInfo responseInfo, byte[] request, byte[] response) {
 		if(onOffButton.isSelected()) {
 			if(toolFlag == IBurpExtenderCallbacks.TOOL_PROXY) {
 				return false;

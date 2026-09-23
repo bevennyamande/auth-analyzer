@@ -37,13 +37,16 @@ import com.protect7.authanalyzer.entities.Session;
 import com.protect7.authanalyzer.entities.Token;
 import com.protect7.authanalyzer.entities.TokenBuilder;
 import com.protect7.authanalyzer.entities.TokenLocation;
+import com.protect7.authanalyzer.filter.DuplicateFilter;
 import com.protect7.authanalyzer.filter.FileTypeFilter;
 import com.protect7.authanalyzer.filter.InScopeFilter;
 import com.protect7.authanalyzer.filter.MethodFilter;
 import com.protect7.authanalyzer.filter.OnlyProxyFilter;
+import com.protect7.authanalyzer.filter.OriginalStatusCodeFilter;
 import com.protect7.authanalyzer.filter.PathFilter;
 import com.protect7.authanalyzer.filter.QueryFilter;
 import com.protect7.authanalyzer.filter.RequestFilter;
+import com.protect7.authanalyzer.filter.ResponseMarkerFilter;
 import com.protect7.authanalyzer.filter.StatusCodeFilter;
 import com.protect7.authanalyzer.gui.dialog.SettingsDialog;
 import com.protect7.authanalyzer.gui.entity.SessionPanel;
@@ -164,7 +167,7 @@ public class ConfigurationPanel extends JPanel {
 		HintCheckBox statusCodeFilterButton = new HintCheckBox("Exclude Status Codes");
 		statusCodeFilterButton.setSelected(true);
 		addFilter(new StatusCodeFilter(filterPanel.getComponentCount(), "Excludes every specified status code"),
-				statusCodeFilterButton, "Enter status codes to filter. Comma separated.\r\neg: 204, 304");
+				statusCodeFilterButton, "Enter status codes to filter. Comma separated.\r\neg: 304, 4xx, 500-599");
 		filterPanel.add(statusCodeFilterButton);
 
 		HintCheckBox pathFilterButton = new HintCheckBox("Exclude Paths");
@@ -182,8 +185,38 @@ public class ConfigurationPanel extends JPanel {
 				new QueryFilter(filterPanel.getComponentCount(),
 						"Excludes every GET query that contains one of the specified string literals"),
 				queryFilterButton,
-				"Enter string literals for queries to be excluded. Comma separated.\r\neg: log, core");
+				"Enter string literals for queries to be excluded. Comma separated.\r\neg: log, core\r\nPrefix with re: for regex (e.g. re:/api/v[0-9]+/)");
 		filterPanel.add(queryFilterButton);
+
+		// Filters below this point are appended after the original 7 filters
+		// (indices 0-6) to keep persisted filterIndex mappings stable across
+		// saved setups.
+		HintCheckBox originalStatusCodeButton = new HintCheckBox("Only Compare Baseline Success");
+		originalStatusCodeButton.setSelected(true);
+		addFilter(
+				new OriginalStatusCodeFilter(filterPanel.getComponentCount(),
+						"Only analyzes requests whose original response had an allowed status code. Reduces false positives by skipping baselines that were already denied (403/404/...)."),
+				originalStatusCodeButton,
+				"Enter the original status codes to KEEP (baseline must match one). Comma separated.\r\neg: 2xx, 3xx or 200, 201, 302");
+		filterPanel.add(originalStatusCodeButton);
+
+		HintCheckBox duplicateFilterButton = new HintCheckBox("Exclude Duplicates");
+		duplicateFilterButton.setSelected(false);
+		addFilter(
+				new DuplicateFilter(filterPanel.getComponentCount(),
+						"Excludes requests whose method + URL + full request content was already analyzed within the dedup window. Prevents identical requests from flooding the queue."),
+				duplicateFilterButton, "");
+		filterPanel.add(duplicateFilterButton);
+
+		HintCheckBox responseMarkerButton = new HintCheckBox("Exclude by Response Marker");
+		responseMarkerButton.setSelected(false);
+		addFilter(
+				new ResponseMarkerFilter(filterPanel.getComponentCount(),
+						"Excludes responses whose body contains any of the specified markers. Useful to drop login walls, rate-limits, maintenance pages."),
+				responseMarkerButton,
+				"Enter response body markers to exclude. Comma separated.\r\neg: rate limit exceeded, maintenance");
+		filterPanel.add(responseMarkerButton);
+
 		startStopButton.putClientProperty("html.disable", null);
 		startStopButton.setText(ANALYZER_STOPPED_TEXT);
 		startStopButton.addActionListener(new ActionListener() {

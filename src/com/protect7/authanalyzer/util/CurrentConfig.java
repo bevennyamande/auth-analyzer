@@ -2,7 +2,10 @@ package com.protect7.authanalyzer.util;
 
 import java.util.ArrayList;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import com.protect7.authanalyzer.controller.RequestController;
 import com.protect7.authanalyzer.entities.Session;
 import com.protect7.authanalyzer.entities.Token;
@@ -25,29 +28,41 @@ public class CurrentConfig {
 	private RequestTableModel tableModel = null;
 	private boolean running = false;
 	private boolean dropOriginal = false;
-	private volatile int mapId = 0;
+	private final AtomicInteger mapId = new AtomicInteger(0);
 	private boolean respectResponseCodeForSameStatus = true;
 	private boolean respectResponseCodeForSimilarStatus = true; 
-	private int deviationForSimilarStatus = 5;
+	private int maxPendingRequests = 2000;
 	private long delayBetweenRequestsInMilliseconds = 0;
+	private volatile long droppedRequests = 0;
 
 	private CurrentConfig() {
 	}
 	
 	public void performAuthAnalyzerRequest(IHttpRequestResponse messageInfo) {
-		analyzerThreadExecutor.execute(new Runnable() {				
-			@Override
-			public void run() {
-				BurpExtender.mainPanel.getCenterPanel().updateAmountOfPendingRequests(
-						analyzerThreadExecutor.getQueue().size());
-				getRequestController().analyze(messageInfo);
-				try {
-					Thread.sleep(delayBetweenRequestsInMilliseconds);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
+		if (running && analyzerThreadExecutor.getQueue().size() >= maxPendingRequests) {
+			if (++droppedRequests == 1 || droppedRequests % 500 == 0) {
+				BurpExtender.callbacks.printOutput(
+						"Auth Analyzer: queue saturated (" + maxPendingRequests + "), dropping request. Increase the 'Max queued requests' setting if this repeats.");
 			}
-		});
+			return;
+		}
+		try {
+			analyzerThreadExecutor.execute(new Runnable() {				
+				@Override
+				public void run() {
+					BurpExtender.mainPanel.getCenterPanel().updateAmountOfPendingRequests(
+							analyzerThreadExecutor.getQueue().size());
+					getRequestController().analyze(messageInfo);
+					try {
+						Thread.sleep(delayBetweenRequestsInMilliseconds);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+				}
+			});
+		} catch (RejectedExecutionException e) {
+			// Executor was shut down mid-submission - ignore, analyzer is stopping.
+		}
 		BurpExtender.mainPanel.getCenterPanel().updateAmountOfPendingRequests(
 				analyzerThreadExecutor.getQueue().size());
 	}
@@ -68,8 +83,10 @@ public class CurrentConfig {
 		if(running) {
 			respectResponseCodeForSameStatus = Setting.getValueAsBoolean(Setting.Item.STATUS_SAME_RESPONSE_CODE);
 			respectResponseCodeForSimilarStatus = Setting.getValueAsBoolean(Setting.Item.STATUS_SIMILAR_RESPONSE_CODE);
-			deviationForSimilarStatus = Setting.getValueAsInteger(Setting.Item.STATUS_SIMILAR_RESPONSE_LENGTH);
 			delayBetweenRequestsInMilliseconds = Setting.getValueAsInteger(Setting.Item.DELAY_BETWEEN_REQUESTS);
+			maxPendingRequests = Setting.getValueAsInteger(Setting.Item.MAX_PENDING_REQUESTS);
+			droppedRequests = 0;
+			Setting.refresh();
 			if(hasPromptForInput() && Setting.getValueAsBoolean(Setting.Item.ONLY_ONE_THREAD_IF_PROMT_FOR_INPUT)) {
 				//Set POOL Size to 1 --> if prompt for input dialog appears no further requests will be repeated until dialog is closed
 				analyzerThreadExecutor = (ThreadPoolExecutor) Executors.newFixedThreadPool(POOL_SIZE_MIN);
@@ -118,8 +135,7 @@ public class CurrentConfig {
 	}
 	
 	public int getNextMapId() {
-		mapId++;
-		return mapId;
+		return mapId.incrementAndGet();
 	}
 	
 	public void setDropOriginal(boolean dropOriginal) {
@@ -177,12 +193,4 @@ public class CurrentConfig {
 	public void setRespectResponseCodeForSimilarFlag(boolean respectResponseCodeForSimilarStatus) {
 		this.respectResponseCodeForSimilarStatus = respectResponseCodeForSimilarStatus;
 	}
-
-	public int getDerivationForSimilarStatus() {
-		return deviationForSimilarStatus;
-	}
-
-	public void setDerivationForSimilarStatus(int derivationForSimilarStatus) {
-		this.deviationForSimilarStatus = derivationForSimilarStatus;
-	}	
 }

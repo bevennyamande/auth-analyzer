@@ -12,7 +12,7 @@ public class InScopeFilter extends RequestFilter {
 
 	@Override
 	public boolean filterRequest(IBurpExtenderCallbacks callbacks, int toolFlag, IRequestInfo requestInfo,
-			IResponseInfo responseInfo) {
+			IResponseInfo responseInfo, byte[] request, byte[] response) {
 		if (onOffButton.isSelected() && !callbacks.isInScope(requestInfo.getUrl())) {
 			incrementFiltered();
 			return true;

@@ -55,9 +55,21 @@ public class Setting {
 	
 	public static void setValue(Item settingItem, String value) {
 		BurpExtender.callbacks.saveExtensionSetting(settingItem.toString(), value);
+		ResponseComparator.invalidateCaches();
+	}
+	
+	/**
+	 * Forces all lazily cached configuration (mask patterns, JSON keys) to reload
+	 * on the write of any setting. 
+	 */
+	public static void refresh() {
+		ResponseComparator.invalidateCaches();
 	}
 	
 	private static String getPersistentSetting(String name) {
+		if(BurpExtender.callbacks == null) {
+			return null;
+		}
 		return BurpExtender.callbacks.loadExtensionSetting(name);
 	}
 
@@ -76,9 +88,25 @@ public class Setting {
 		STATUS_SAME_RESPONSE_CODE("true", Type.BOOLEAN, 
 				"Respect Response Code to flag with Status SAME", null),
 		STATUS_SIMILAR_RESPONSE_CODE("true", Type.BOOLEAN, 
-				"(Condition 1) Respect Response Code to flag with Status SIMILAR", null),
-		STATUS_SIMILAR_RESPONSE_LENGTH("5", Type.INTEGER, 
-				"(Condition 2) Deviation of Content-Length in percent to flag with Status SIMILAR", new Range(1,100));
+				"Respect Response Code to flag with Status SIMILAR", null),
+		SIMILARITY_THRESHOLD("85", Type.INTEGER, 
+				"Minimum content similarity (percent) required to flag SIMILAR", new Range(50,100)),
+		NORMALIZE_BEFORE_COMPARE("true", Type.BOOLEAN, 
+				"Mask volatile values (UUID, JWT, timestamps, hashes) before comparing responses", null),
+		MASK_PATTERNS("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12},eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+,(?:\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*?)(?:Z|[+-]\\d{2}:?\\d{2})?,(?<!\\d)\\d{13}(?!\\d),[0-9a-fA-F]{32}[0-9a-fA-F]*", Type.ARRAY,
+				"Regex patterns of volatile values masked before response comparison (comma separated)", null),
+		MASK_JSON_KEYS("token,csrf,xsrf,nonce,requestId,request_id,request-id,traceId,trace_id,trace-id,spanId,span_id,jti,iat,exp,nbf,timestamp,createdAt,created_at,updatedAt,updated_at,expiresAt,expires_at,expiresIn,expires_in,sessionId,session_id", Type.ARRAY,
+				"JSON keys whose values are masked before response comparison", null),
+		LOGIN_RESPONSE_MARKERS("type=\"password\",type='password',forgot password,please log in,session expired,sign in to continue,/login,/signin", Type.ARRAY,
+				"Response markers that indicate a login/expired-session page (blocks SAME/SIMILAR flagging)", null),
+		SESSION_EXPIRY_THRESHOLD("5", Type.INTEGER, 
+				"Consecutive auth-bounce responses before a session-expiry warning is raised", new Range(1,100)),
+		AUTO_PAUSE_SESSION_ON_EXPIRY("true", Type.BOOLEAN, 
+				"Automatically pause a session when expired-session is suspected", null),
+		MAX_PENDING_REQUESTS("2000", Type.INTEGER, 
+				"Max queued requests before new ones are dropped (backpressure)", new Range(100,100000)),
+		DUPLICATE_FILTER_SIZE("10000", Type.INTEGER, 
+				"Max remembered requests for the Exclude Duplicates filter", new Range(100,1000000));
 		
 		private final String defaultValue;
 		private final Type type;

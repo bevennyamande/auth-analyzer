@@ -30,6 +30,8 @@ public class Session {
 	private ArrayList<Token> tokens = new ArrayList<Token>();
 	private ArrayList<MatchAndReplace> matchAndReplaceList = new ArrayList<MatchAndReplace>();
 	private final StatusPanel statusPanel;
+	private transient volatile int consecutiveAuthFailures = 0;
+	private transient volatile boolean expiryWarningActive = false;
 
 	public Session(String name, String headersToReplace, boolean removeHeaders, String headersToRemove, boolean filterRequestsWithSameHeader, boolean restrictToScope, 
 			URL scopeUrl, boolean testCors, ArrayList<Token> tokens, ArrayList<MatchAndReplace> matchAndReplaceList, StatusPanel statusPanel) {
@@ -98,6 +100,22 @@ public class Session {
 		return statusPanel;
 	}
 
+	public int getConsecutiveAuthFailures() {
+		return consecutiveAuthFailures;
+	}
+
+	public void setConsecutiveAuthFailures(int consecutiveAuthFailures) {
+		this.consecutiveAuthFailures = consecutiveAuthFailures;
+	}
+
+	public boolean isExpiryWarningActive() {
+		return expiryWarningActive;
+	}
+
+	public void setExpiryWarningActive(boolean expiryWarningActive) {
+		this.expiryWarningActive = expiryWarningActive;
+	}
+
 	public ArrayList<Token> getTokens() {
 		return tokens;
 	}
@@ -121,6 +139,12 @@ public class Session {
 					return true;
 				}
 				if(field.getDeclaringClass() == Session.class && field.getName().equals("statusPanel")) {
+					return true;
+				}
+				if(field.getDeclaringClass() == Session.class && field.getName().equals("consecutiveAuthFailures")) {
+					return true;
+				}
+				if(field.getDeclaringClass() == Session.class && field.getName().equals("expiryWarningActive")) {
 					return true;
 				}
 				if(field.getDeclaringClass() == Token.class && field.getName().equals("request")) {

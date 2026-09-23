@@ -4,6 +4,11 @@ import burp.IBurpExtenderCallbacks;
 import burp.IRequestInfo;
 import burp.IResponseInfo;
 
+/**
+ * Filters requests whose query string contains any configured literal, or
+ * matches any configured regex. Prefix a literal with
+ * {@value RequestFilter#REGEX_PREFIX} to treat it as a regular expression.
+ */
 public class QueryFilter extends RequestFilter {
 
 	public QueryFilter(int filterIndex, String description) {
@@ -12,15 +17,17 @@ public class QueryFilter extends RequestFilter {
 	}
 
 	@Override
-	public boolean filterRequest(IBurpExtenderCallbacks callbacks, int toolFlag, IRequestInfo requestInfo, IResponseInfo responseInfo) {
+	public boolean filterRequest(IBurpExtenderCallbacks callbacks, int toolFlag, IRequestInfo requestInfo, IResponseInfo responseInfo, byte[] request, byte[] response) {
 		if(onOffButton.isSelected()) {
 			if(requestInfo.getUrl().getQuery() != null) {
-				String query = requestInfo.getUrl().getQuery().toString().toLowerCase();
-				for(String stringLiteral : stringLiterals) {
-					if(query.contains(stringLiteral.toLowerCase()) && !stringLiteral.trim().equals("")) {
-						incrementFiltered();
-						return true;
-					}
+				LiteralMatcher matcher = getLiteralMatcher();
+				if(matcher.size() == 0) {
+					return false;
+				}
+				String query = requestInfo.getUrl().getQuery().toLowerCase();
+				if(matcher.anyMatches(query)) {
+					incrementFiltered();
+					return true;
 				}
 			}
 		}

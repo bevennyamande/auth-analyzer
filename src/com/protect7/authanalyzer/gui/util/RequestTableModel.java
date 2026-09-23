@@ -14,6 +14,10 @@ public class RequestTableModel extends AbstractTableModel {
 	private final ArrayList<OriginalRequestResponse> originalRequestResponseList = new ArrayList<OriginalRequestResponse>();
 	private final CurrentConfig config = CurrentConfig.getCurrentConfig();
 	private final int STATIC_COLUMN_COUNT = 7;
+	// Cache of the lowest row id per endpoint, kept in sync with the row list to
+	// avoid an O(n) duplicate scan for every row during filtering.
+	private java.util.HashMap<String, Integer> minIdByEndpoint = new java.util.HashMap<String, Integer>();
+	private boolean endpointCacheDirty = false;
 	
 	public ArrayList<OriginalRequestResponse> getOriginalRequestResponseList() {
 		return originalRequestResponseList;
@@ -21,6 +25,12 @@ public class RequestTableModel extends AbstractTableModel {
 	
 	public synchronized void addNewRequestResponse(OriginalRequestResponse requestResponse) {
 		originalRequestResponseList.add(requestResponse);
+		if(!endpointCacheDirty) {
+			Integer currentMinId = minIdByEndpoint.get(requestResponse.getEndpoint());
+			if(currentMinId == null || requestResponse.getId() < currentMinId) {
+				minIdByEndpoint.put(requestResponse.getEndpoint(), requestResponse.getId());
+			}
+		}
 		final int index = originalRequestResponseList.size()-1;
 		SwingUtilities.invokeLater(new Runnable() {
 			
@@ -32,16 +42,28 @@ public class RequestTableModel extends AbstractTableModel {
 	}
 	
 	public boolean isDuplicate(int id, String endpoint) {
-		for(OriginalRequestResponse requestResponse : originalRequestResponseList) {
-			if(requestResponse.getEndpoint().equals(endpoint) && requestResponse.getId() < id) {
-				return true;
+		rebuildEndpointCacheIfDirty();
+		Integer minId = minIdByEndpoint.get(endpoint);
+		return minId != null && minId < id;
+	}
+	
+	private void rebuildEndpointCacheIfDirty() {
+		if(endpointCacheDirty) {
+			minIdByEndpoint = new java.util.HashMap<String, Integer>();
+			for(OriginalRequestResponse requestResponse : originalRequestResponseList) {
+				int id = requestResponse.getId();
+				Integer currentMinId = minIdByEndpoint.get(requestResponse.getEndpoint());
+				if(currentMinId == null || id < currentMinId) {
+					minIdByEndpoint.put(requestResponse.getEndpoint(), id);
+				}
 			}
+			endpointCacheDirty = false;
 		}
-		return false;
 	}
 	
 	public void deleteRequestResponse(OriginalRequestResponse requestResponse) {
 		originalRequestResponseList.remove(requestResponse);
+		endpointCacheDirty = true;
 		SwingUtilities.invokeLater(new Runnable() {			
 			@Override
 			public void run() {
@@ -52,6 +74,8 @@ public class RequestTableModel extends AbstractTableModel {
 	
 	public void clearRequestMap() {
 		originalRequestResponseList.clear();
+		minIdByEndpoint.clear();
+		endpointCacheDirty = false;
 		fireTableDataChanged();
 	}
 	

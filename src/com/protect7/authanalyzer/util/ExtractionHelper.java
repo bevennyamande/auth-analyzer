@@ -144,7 +144,13 @@ public class ExtractionHelper {
 			JsonObject jsonObject = jsonElement.getAsJsonObject();
 			for (Map.Entry<String, JsonElement> entry : jsonObject.entrySet()) {
 				if (entry.getValue().isJsonArray() || entry.getValue().isJsonObject()) {
-					return getJsonTokenValue(entry.getValue(), token);
+					// Recurse but do NOT stop at the first nested value - the
+					// search continues to sibling keys on a miss.
+					String nestedValue = getJsonTokenValue(entry.getValue(), token);
+					if (nestedValue != null) {
+						return nestedValue;
+					}
+					continue;
 				}
 				if (entry.getValue().isJsonPrimitive()) {
 					if (entry.getKey().equals(token.getExtractName())) {
@@ -156,7 +162,10 @@ public class ExtractionHelper {
 		if (jsonElement.isJsonArray()) {
 			for (JsonElement arrayJsonEl : jsonElement.getAsJsonArray()) {
 				if (arrayJsonEl.isJsonObject()) {
-					return getJsonTokenValue(arrayJsonEl.getAsJsonObject(), token);
+					String nestedValue = getJsonTokenValue(arrayJsonEl.getAsJsonObject(), token);
+					if (nestedValue != null) {
+						return nestedValue;
+					}
 				}
 			}
 		}
@@ -298,12 +307,12 @@ public class ExtractionHelper {
 	private static void createTokensFromJson(JsonElement jsonElement, HashMap<String, Token> tokenMap) {
 		if (jsonElement.isJsonObject()) {
 			JsonObject jsonObject = jsonElement.getAsJsonObject();
+			String[] staticPatterns = Setting.getValueAsArray(Setting.Item.AUTOSET_PARAM_STATIC_PATTERNS);
 			for (Map.Entry<String, JsonElement> entry : jsonObject.entrySet()) {
 				if (entry.getValue().isJsonArray() || entry.getValue().isJsonObject()) {
-					createTokensFromJson(jsonElement, tokenMap);
+					createTokensFromJson(entry.getValue(), tokenMap);
 				}
 				if (entry.getValue().isJsonPrimitive()) {
-					String[] staticPatterns = Setting.getValueAsArray(Setting.Item.AUTOSET_PARAM_STATIC_PATTERNS);
 					for(String pattern : staticPatterns) {
 						if(entry.getKey().toLowerCase().contains(pattern)) {
 							Token token = new TokenBuilder()
@@ -323,7 +332,7 @@ public class ExtractionHelper {
 		if (jsonElement.isJsonArray()) {
 			for (JsonElement arrayJsonEl : jsonElement.getAsJsonArray()) {
 				if (arrayJsonEl.isJsonObject()) {
-					createTokensFromJson(jsonElement, tokenMap);
+					createTokensFromJson(arrayJsonEl, tokenMap);
 				}
 			}
 		}

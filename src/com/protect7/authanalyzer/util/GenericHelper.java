@@ -34,12 +34,14 @@ public class GenericHelper {
 				if(applyFilters) {
 					IRequestInfo requestInfo = BurpExtender.callbacks.getHelpers().analyzeRequest(message);
 					IResponseInfo responseInfo = null;
-					if(message.getResponse() != null) {
-						responseInfo = BurpExtender.callbacks.getHelpers().analyzeResponse(message.getResponse());
+					byte[] request = message.getRequest();
+					byte[] response = message.getResponse();
+					if(response != null) {
+						responseInfo = BurpExtender.callbacks.getHelpers().analyzeResponse(response);
 					}
 					for(int i=0; i<CurrentConfig.getCurrentConfig().getRequestFilterList().size(); i++) {
 						RequestFilter filter = CurrentConfig.getCurrentConfig().getRequestFilterAt(i);
-						if(filter.filterRequest(BurpExtender.callbacks, IBurpExtenderCallbacks.TOOL_PROXY, requestInfo, responseInfo)) {
+						if(filter.filterRequest(BurpExtender.callbacks, IBurpExtenderCallbacks.TOOL_PROXY, requestInfo, responseInfo, request, response)) {
 							isFiltered = true;
 							break;
 						}
@@ -69,6 +71,15 @@ public class GenericHelper {
 	}
 	
 	public static void animateBurpExtensionTab() {
+		if (!javax.swing.SwingUtilities.isEventDispatchThread()) {
+			javax.swing.SwingUtilities.invokeLater(new Runnable() {
+				@Override
+				public void run() {
+					animateBurpExtensionTab();
+				}
+			});
+			return;
+		}
 		if(BurpExtender.mainPanel.getParent() != null && BurpExtender.mainPanel.getParent() instanceof JTabbedPane) {
 			JTabbedPane burpTabbedPane = (JTabbedPane) BurpExtender.mainPanel.getParent();
 			for(int i=0; i<burpTabbedPane.getTabCount(); i++) {

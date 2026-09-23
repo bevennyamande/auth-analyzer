@@ -11,6 +11,7 @@ import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 import com.protect7.authanalyzer.entities.MatchAndReplace;
 import com.protect7.authanalyzer.entities.Session;
 import com.protect7.authanalyzer.entities.Token;
@@ -24,9 +25,11 @@ public class StatusPanel extends JPanel{
 	private final JLabel headerRemoveLabel = new JLabel("<html><strong>Header(s) to Remove</strong></html>");
 	private final JLabel headerToRemoveValue = new JLabel("");
 	private final JLabel amountOfFilteredRequestsLabel = new JLabel("");
+	private final JLabel sessionExpiryLabel = new JLabel("");
+	private final JButton onOffSwitch = new JButton();
 	private final String SESSION_STARTED_TEXT = "<html><span style='color:green; font-weight: bold'>&#x26AB;</span> Session Running</html>";
 	private final String SESSION_PAUSED_TEXT = "<html><span style='color:orange; font-weight: bold'>&#x26AB;</span> Session Paused</html>";
-	private boolean running = true;
+	private volatile boolean running = true;
 	private final HashMap<String, JLabel> tokenLabelMap = new HashMap<String, JLabel>();
 	private final HashMap<String, JButton> refreshButtonMap = new HashMap<String, JButton>();
 	private final HashMap<String, JButton> eraseButtonMap = new HashMap<String, JButton>();
@@ -56,7 +59,7 @@ public class StatusPanel extends JPanel{
 		c.gridwidth = 2;
 		c.gridx = 2;
 		c.anchor = GridBagConstraints.WEST;
-		JButton onOffSwitch = new JButton(SESSION_STARTED_TEXT);
+		onOffSwitch.setText(SESSION_STARTED_TEXT);
 		onOffSwitch.putClientProperty("html.disable", null);
 		if(!running) {
 			onOffSwitch.setText(SESSION_PAUSED_TEXT);
@@ -72,6 +75,13 @@ public class StatusPanel extends JPanel{
 			}
 		});		
 		add(onOffSwitch, c);
+		
+		c.gridwidth = 2;
+		c.gridx = 3;
+		c.anchor = GridBagConstraints.WEST;
+		sessionExpiryLabel.putClientProperty("html.disable", null);
+		sessionExpiryLabel.setVisible(false);
+		add(sessionExpiryLabel, c);
 		
 		c.gridwidth = 4;
 		c.gridx = 0;
@@ -256,24 +266,79 @@ public class StatusPanel extends JPanel{
 		return running;
 	}
 	
+	public void setRunning(boolean running) {
+		if(SwingUtilities.isEventDispatchThread()) {
+			this.running = running;
+			onOffSwitch.setText(running ? SESSION_STARTED_TEXT : SESSION_PAUSED_TEXT);
+		}
+		else {
+			SwingUtilities.invokeLater(new Runnable() {
+				@Override
+				public void run() {
+					StatusPanel.this.running = running;
+					onOffSwitch.setText(running ? SESSION_STARTED_TEXT : SESSION_PAUSED_TEXT);
+				}
+			});
+		}
+	}
+	
+	public void toggleRunning() {
+		setRunning(!running);
+	}
+	
 	public void incrementAmountOfFitleredRequests() {
-		amountOfFilteredRequests++;
-		amountOfFilteredRequestsLabel.setText("Amount of Filtered Requests: " + amountOfFilteredRequests);
-		GenericHelper.uiUpdateAnimation(amountOfFilteredRequestsLabel, Color.RED);
+		SwingUtilities.invokeLater(new Runnable() {
+			@Override
+			public void run() {
+				amountOfFilteredRequests++;
+				amountOfFilteredRequestsLabel.setText("Amount of Filtered Requests: " + amountOfFilteredRequests);
+				GenericHelper.uiUpdateAnimation(amountOfFilteredRequestsLabel, Color.RED);
+			}
+		});
+	}
+	
+	/**
+	 * Updates the session-expiry warning label. Called from a worker thread while
+	 * analyzing; always marshaled to the EDT.
+	 */
+	public void updateSessionExpiry(final boolean expired, final int consecutiveFailures) {
+		SwingUtilities.invokeLater(new Runnable() {
+			@Override
+			public void run() {
+				sessionExpiryLabel.putClientProperty("html.disable", null);
+				if(expired) {
+					sessionExpiryLabel.setText("<html><span style='color:red; font-weight: bold'>&#x26A0;&nbsp;Session Expired? " 
+							+ consecutiveFailures + " consecutive auth-bounce responses. Refresh the session headers.</span></html>");
+					sessionExpiryLabel.setVisible(true);
+				}
+				else {
+					sessionExpiryLabel.setText("");
+					sessionExpiryLabel.setVisible(false);
+				}
+			}
+		});
 	}
 	
 	public void updateTokenStatus(Token token) {
-		JLabel tokenLabel = tokenLabelMap.get(token.getName());
-		tokenLabel.putClientProperty("html.disable", null);
-		tokenLabel.setText(getTokenText(token));
-		GenericHelper.uiUpdateAnimation(tokenLabel, new Color(0, 153, 0));
-		if(token.getValue() != null) {
-			if(refreshButtonMap.get(token.getName()) != null) {
-				refreshButtonMap.get(token.getName()).setEnabled(true);
+		SwingUtilities.invokeLater(new Runnable() {
+			@Override
+			public void run() {
+				JLabel tokenLabel = tokenLabelMap.get(token.getName());
+				if(tokenLabel == null) {
+					return;
+				}
+				tokenLabel.putClientProperty("html.disable", null);
+				tokenLabel.setText(getTokenText(token));
+				GenericHelper.uiUpdateAnimation(tokenLabel, new Color(0, 153, 0));
+				if(token.getValue() != null) {
+					if(refreshButtonMap.get(token.getName()) != null) {
+						refreshButtonMap.get(token.getName()).setEnabled(true);
+					}
+					if(eraseButtonMap.get(token.getName()) != null) {
+						eraseButtonMap.get(token.getName()).setEnabled(true);
+					}
+				}
 			}
-			if(eraseButtonMap.get(token.getName()) != null) {
-				eraseButtonMap.get(token.getName()).setEnabled(true);
-			}
-		}
+		});
 	}
 }

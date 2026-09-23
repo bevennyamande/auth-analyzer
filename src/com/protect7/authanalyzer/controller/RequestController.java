@@ -21,6 +21,8 @@ import com.protect7.authanalyzer.util.CurrentConfig;
 import com.protect7.authanalyzer.util.ExtractionHelper;
 import com.protect7.authanalyzer.util.GenericHelper;
 import com.protect7.authanalyzer.util.RequestModifHelper;
+import com.protect7.authanalyzer.util.ResponseComparator;
+import com.protect7.authanalyzer.util.Setting;
 import burp.BurpExtender;
 import burp.IHttpRequestResponse;
 import burp.IRequestInfo;
@@ -104,20 +106,22 @@ public class RequestController {
 								}
 							}
 						}
-						if(originalRequestResponse.getResponse() != null) {
-							BypassConstants bypassConstant = analyzeResponse(originalRequestResponse.getResponse(),
-									sessionRequestResponse.getResponse(), originalResponseInfo, sessionResponseInfo);
-							AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
-									sessionRequestResponse, bypassConstant, null, sessionResponseInfo.getStatusCode(),
-									sessionRequestResponse.getResponse().length - sessionResponseInfo.getBodyOffset());
-							session.putRequestResponse(mapId, analyzerRequestResponse);
-						}
-						else {
-							AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
-									sessionRequestResponse, BypassConstants.NA, null, sessionResponseInfo.getStatusCode(),
-									sessionRequestResponse.getResponse().length - sessionResponseInfo.getBodyOffset());
-							session.putRequestResponse(mapId, analyzerRequestResponse);
-						}
+if(originalRequestResponse.getResponse() != null) {
+						ResponseComparator.ComparisonResult comparisonResult = ResponseComparator.compare(
+								originalRequestResponse.getResponse(),
+								sessionRequestResponse.getResponse(), originalResponseInfo, sessionResponseInfo);
+						AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
+								sessionRequestResponse, comparisonResult.status, comparisonResult.infoText, sessionResponseInfo.getStatusCode(),
+								sessionRequestResponse.getResponse().length - sessionResponseInfo.getBodyOffset());
+						session.putRequestResponse(mapId, analyzerRequestResponse);
+						updateSessionExpiryStatus(session, sessionResponseInfo, comparisonResult.loginBounce, originalResponseInfo);
+					}
+					else {
+						AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
+								sessionRequestResponse, BypassConstants.NA, null, sessionResponseInfo.getStatusCode(),
+								sessionRequestResponse.getResponse().length - sessionResponseInfo.getBodyOffset());
+						session.putRequestResponse(mapId, analyzerRequestResponse);
+					}
 					} else {
 						AnalyzerRequestResponse analyzerRequestResponse = new AnalyzerRequestResponse(
 								null, BypassConstants.NA, "Session Request / Response is null. Probably no response "
@@ -173,30 +177,45 @@ public class RequestController {
 
 
 	/*
-	 * Bypass if: - Both Responses have same Response Body and Status Code
-	 * 
-	 * Potential Bypass if: - Both Responses have same Response Code - Both
-	 * Responses have +-5% of response body length
-	 *
+	 * Session-expiry detection: when the original response was a successful
+	 * (2xx) baseline but the replayed session keeps returning auth-bounce
+	 * responses (401/403/407/451 or a detected login/expired-session page), the
+	 * session credentials are stale. Rather than misreading every replayed
+	 * response as "the resource is protected by a different role", the user is
+	 * warned and (optionally) the session is auto-paused.
 	 */
-	public BypassConstants analyzeResponse(byte[] originalResponse, byte[] sessionResponse,
-			IResponseInfo originalResponseInfo, IResponseInfo sessionResponseInfo) {
-		byte[] originalResponseBody = Arrays.copyOfRange(originalResponse, originalResponseInfo.getBodyOffset(),
-				originalResponse.length);
-		byte[] sessionResponseBody = Arrays.copyOfRange(sessionResponse, sessionResponseInfo.getBodyOffset(),
-				sessionResponse.length);
-		if (Arrays.equals(originalResponseBody, sessionResponseBody)
-				&& (originalResponseInfo.getStatusCode() == sessionResponseInfo.getStatusCode() || !CurrentConfig.getCurrentConfig().isRespectResponseCodeForSameStatus())) {
-			return BypassConstants.SAME;
-		}
-		if (originalResponseInfo.getStatusCode() == sessionResponseInfo.getStatusCode() || !CurrentConfig.getCurrentConfig().isRespectResponseCodeForSimilarStatus()) {
-			int range = originalResponseBody.length / (100/CurrentConfig.getCurrentConfig().getDerivationForSimilarStatus());
-			int difference = originalResponseBody.length - sessionResponseBody.length;
-			// Check if difference is in range
-			if (difference <= range && difference >= -range) {
-				return BypassConstants.SIMILAR;
+	private void updateSessionExpiryStatus(Session session, IResponseInfo sessionResponseInfo, 
+			boolean loginBounce, IResponseInfo originalResponseInfo) {
+		int sessionStatus = sessionResponseInfo.getStatusCode();
+		boolean originalSuccess = originalResponseInfo != null && ResponseComparator.isSuccess(originalResponseInfo.getStatusCode());
+		boolean authBounce = isAuthBounceStatusCode(sessionStatus) || loginBounce;
+		boolean sessionSuccess = ResponseComparator.isSuccess(sessionStatus);
+		
+		if(originalSuccess && authBounce && session.getStatusPanel().isRunning()) {
+			int failures = session.getConsecutiveAuthFailures() + 1;
+			session.setConsecutiveAuthFailures(failures);
+			int threshold = Setting.getValueAsInteger(Setting.Item.SESSION_EXPIRY_THRESHOLD);
+			if(failures >= threshold && !session.isExpiryWarningActive()) {
+				session.setExpiryWarningActive(true);
+				session.getStatusPanel().updateSessionExpiry(true, failures);
+				if(Setting.getValueAsBoolean(Setting.Item.AUTO_PAUSE_SESSION_ON_EXPIRY)) {
+					session.getStatusPanel().setRunning(false);
+				}
 			}
 		}
-		return BypassConstants.DIFFERENT;
+		else if(sessionSuccess || !authBounce) {
+			// Healthy response pattern - reset the failure streak
+			if(session.getConsecutiveAuthFailures() != 0) {
+				session.setConsecutiveAuthFailures(0);
+			}
+			if(session.isExpiryWarningActive()) {
+				session.setExpiryWarningActive(false);
+				session.getStatusPanel().updateSessionExpiry(false, 0);
+			}
+		}
+	}
+
+	private boolean isAuthBounceStatusCode(int statusCode) {
+		return statusCode == 401 || statusCode == 403 || statusCode == 407 || statusCode == 451;
 	}
 }

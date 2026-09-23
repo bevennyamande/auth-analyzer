@@ -12,11 +12,11 @@ public class MethodFilter extends RequestFilter {
 	}
 
 	@Override
-	public boolean filterRequest(IBurpExtenderCallbacks callbacks, int toolFlag, IRequestInfo requestInfo, IResponseInfo responseInfo) {
-		if(onOffButton.isSelected()) {		
-			String requestMethod = requestInfo.getMethod();
+	public boolean filterRequest(IBurpExtenderCallbacks callbacks, int toolFlag, IRequestInfo requestInfo, IResponseInfo responseInfo, byte[] request, byte[] response) {
+		if(onOffButton.isSelected()) {
+			String requestMethod = requestInfo.getMethod().toLowerCase();
 			for(String method : stringLiterals) {
-				if(requestMethod.toLowerCase().equals(method.toLowerCase()) && !method.trim().equals("")) {
+				if(!method.trim().equals("") && requestMethod.equals(method.trim().toLowerCase())) {
 					incrementFiltered();
 					return true;
 				}

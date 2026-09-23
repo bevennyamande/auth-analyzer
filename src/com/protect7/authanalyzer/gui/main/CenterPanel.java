@@ -506,11 +506,19 @@ public class CenterPanel extends JPanel {
 	}
 	
 	public void toggleSearchButtonText() {
-		if(searchButton.getIcon() == null) {
-			searchButton.setIcon(loaderImageIcon);
+		setSearchButtonActive(searchButton.getIcon() == null);
+	}
+
+	public void setSearchButtonActive(boolean active) {
+		if(active) {
+			if(searchButton.getIcon() == null) {
+				searchButton.setIcon(loaderImageIcon);
+			}
 		}
 		else {
-			searchButton.setIcon(null);
+			if(searchButton.getIcon() != null) {
+				searchButton.setIcon(null);
+			}
 		}
 	}
 
@@ -544,13 +552,18 @@ public class CenterPanel extends JPanel {
 	}
 	
 	public void updateAmountOfPendingRequests(int amountOfPendingRequests) {
-		if(amountOfPendingRequests == 0) {
-			pendingRequestsLabel.setVisible(false);
-		}
-		else {
-			pendingRequestsLabel.setVisible(true);
-			pendingRequestsLabel.setText("Pending Requests Queue: " + amountOfPendingRequests);
-		}
+		SwingUtilities.invokeLater(new Runnable() {
+			@Override
+			public void run() {
+				if(amountOfPendingRequests == 0) {
+					pendingRequestsLabel.setVisible(false);
+				}
+				else {
+					pendingRequestsLabel.setVisible(true);
+					pendingRequestsLabel.setText("Pending Requests Queue: " + amountOfPendingRequests);
+				}
+			}
+		});
 	} 
 	
 	private void changeRequestResponseView(boolean force) {

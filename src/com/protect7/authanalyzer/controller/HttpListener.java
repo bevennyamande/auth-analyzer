@@ -38,12 +38,14 @@ public class HttpListener implements IHttpListener, IProxyListener {
 		boolean isFiltered = false;
 		IRequestInfo requestInfo = BurpExtender.callbacks.getHelpers().analyzeRequest(messageInfo);
 		IResponseInfo responseInfo = null;
-		if(messageInfo.getResponse() != null) {
-			responseInfo = BurpExtender.callbacks.getHelpers().analyzeResponse(messageInfo.getResponse());
+		byte[] request = messageInfo.getRequest();
+		byte[] response = messageInfo.getResponse();
+		if(response != null) {
+			responseInfo = BurpExtender.callbacks.getHelpers().analyzeResponse(response);
 		}
 		for(int i=0; i<config.getRequestFilterList().size(); i++) {
 			RequestFilter filter = config.getRequestFilterAt(i);
-			if(filter.filterRequest(BurpExtender.callbacks, toolFlag, requestInfo, responseInfo)) {
+			if(filter.filterRequest(BurpExtender.callbacks, toolFlag, requestInfo, responseInfo, request, response)) {
 				return true;
 			}
 		}

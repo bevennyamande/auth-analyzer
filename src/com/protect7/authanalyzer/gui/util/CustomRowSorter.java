@@ -25,7 +25,10 @@ public class CustomRowSorter extends TableRowSorter<RequestTableModel> {
 		showPotentialBypassed.addActionListener(e -> tableModel.fireTableDataChanged());
 		showNotBypassed.addActionListener(e -> tableModel.fireTableDataChanged());
 		showNA.addActionListener(e -> tableModel.fireTableDataChanged());
-		filterText.addActionListener(e -> tableModel.fireTableDataChanged());
+		filterText.addActionListener(e -> {
+			centerPanel.setSearchButtonActive(filterText.getText() != null && !filterText.getText().equals(""));
+			tableModel.fireTableDataChanged();
+		});
 		setMaxSortKeys(1);
         setSortKeys(Collections.singletonList(new RowSorter.SortKey(0, SortOrder.DESCENDING)));
 		
@@ -34,7 +37,6 @@ public class CustomRowSorter extends TableRowSorter<RequestTableModel> {
 			
 			public boolean include(Entry<?, ?> entry) {
 				if(filterText.getText() != null && !filterText.getText().equals("")) {
-					centerPanel.toggleSearchButtonText();
 					boolean doShow = false;
 					if(searchInPath.isSelected()) {
 						boolean contained = entry.getStringValue(3).toString().contains(filterText.getText());
@@ -80,7 +82,6 @@ public class CustomRowSorter extends TableRowSorter<RequestTableModel> {
 							e.printStackTrace();
 						}
 					}
-					centerPanel.toggleSearchButtonText();
 					if(!doShow && (searchInPath.isSelected() || searchInResponse.isSelected() || searchInRequest.isSelected())) {
 						return false;
 					}
